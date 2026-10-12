@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ГЛУБИНА</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Океанский фон */
+        #ocean {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, 
+                #00d4aa 0%, 
+                #0077b6 15%, 
+                #03045e 40%, 
+                #000 100%);
+            transition: background 0.5s;
+        }
+
+        /* Частицы планктона */
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: float 8s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
+            50% { transform: translateY(-20px) translateX(10px); opacity: 0.8; }
+        }
+
+        /* Глубиномер */
+        #depth-meter {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 120px;
+            font-weight: bold;
+            text-shadow: 0 0 30px rgba(0, 212, 170, 0.5);
+            z-index: 10;
+            pointer-events: none;
+            transition: all 0.3s;
+        }
+
+        #depth-label {
+            position: fixed;
+            top: calc(50% + 80px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            opacity: 0.7;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Подводный аппарат */
+        #submarine {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 60px;
+            z-index: 5;
+            transition: transform 0.1s;
+        }
+
+        .sub-body {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            position: relative;
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+        }
+
+        .sub-window {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #00d4aa;
+            border-radius: 50%;
+            top: 20px;
+            left: 30px;
+            box-shadow: 0 0 20px #00d4aa;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; box-shadow: 0 0 30px #00d4aa; }
+        }
+
+        .sub-light {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 40px solid transparent;
+            border-right: 40px solid transparent;
+            border-top: 100px solid rgba(255, 255, 200, 0.1);
+            top: 30px;
+            left: 0;
+            transform-origin: top center;
+        }
+
+        /* Интерфейс */
+        .ui-panel {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 20;
+        }
+
+        #stats-panel {
+            top: 20px;
+            left: 20px;
+            min-width: 200px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .stat-value {
+            color: #00d4aa;
+            font-weight: bold;
+        }
+
+        #click-btn {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid #00d4aa;
+            background: radial-gradient(circle, rgba(0, 212, 170, 0.2), transparent);
+            color: #00d4aa;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 20;
+            transition: all 0.1s;
+            font-family: inherit;
+        }
+
+        #click-btn:hover {
+            background: radial-gradient(circle, rgba(0, 212, 170, 0.4), transparent);
+            box-shadow: 0 0 30px rgba(0, 212, 170, 0.5);
+        }
+
+        #click-btn:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+
+        /* Уведомления о находках */
+        #notification {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: linear-gradient(135deg, rgba(0, 212, 170, 0.9), rgba(0, 119, 182, 0.9));
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-size: 18px;
+            opacity: 0;
+            transition: all 0.5s;
+            z-index: 30;
+            pointer-events: none;
+            text-align: center;
+            box-shadow: 0 10px 50px rgba(0, 212, 170, 0.3);
+        }
+
+        #notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Коллекция */
+        #collection-panel {
+            top: 20px;
+            right: 20px;
+            max-width: 250px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .collection-title {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #00d4aa;
+        }
+
+        .creature-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .creature-icon {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .creature-rarity-common { background: rgba(255, 255, 255, 0.2); }
+        .creature-rarity-rare { background: rgba(0, 212, 170, 0.3); }
+        .creature-rarity-epic { background: rgba(147, 0, 211, 0.3); }
+        .creature-rarity-legendary { background: rgba(255, 215, 0, 0.3); }
+
+        /* Апгрейды */
+        #upgrades-panel {
+            bottom: 20px;
+            left: 20px;
+            max-width: 300px;
+        }
+
+        .upgrade-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upgrade-item:hover {
+            background: rgba(0, 212, 170, 0.1);
+        }
+
+        .upgrade-item.purchased {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        .upgrade-cost {
+            color: #ffd700;
+            font-size: 12px;
+        }
+
+        /* Прогресс-бар глубины */
+        #depth-progress {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 20;
+        }
+
+        #depth-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4aa, #0077b6);
+            width: 0%;
+            transition: width 0.3s;
+            box-shadow: 0 0 10px #00d4aa;
+        }
+
+        /* Зоны глубин */
+        .zone-marker {
+            position: fixed;
+            right: 20px;
+            font-size: 11px;
+            opacity: 0.5;
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        /* Всплывающий текст */
+        .float-text {
+            position: fixed;
+            pointer-events: none;
+            font-weight: bold;
+            z-index: 25;
+            animation: floatUp 1s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-50px); }
+        }
+
+        /* Таймер автопогружения */
+        #auto-dive {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-size: 12px;
+            opacity: 0.7;
+            z-index: 20;
+        }
+
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e, #0f0f1e);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .modal h2 {
+            color: #00d4aa;
+            margin-bottom: 20px;
+        }
+
+        .modal p {
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+
+        .modal-btn {
+            background: #00d4aa;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            #depth-meter { font-size: 60px; }
+            #stats-panel, #collection-panel, #upgrades-panel {
+                transform: scale(0.8);
+                transform-origin: top left;
+            }
+            #collection-panel { transform-origin: top right; }
+        }
+
+        /* Скрытие панелей для фокуса */
+        .hidden { display: none !important; }
+
+        /* Эффект давления на глубине */
+        #pressure-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 3;
+            opacity: 0;
+            background: radial-gradient(circle, transparent 30%, rgba(0, 0, 0, 0.8) 100%);
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+    <!-- Фон океана -->
+    <div id="ocean"></div>
+    <div id="pressure-overlay"></div>
+
+    <!-- Частицы -->
+    <div id="particles"></div>
+
+    <!-- Глубиномер -->
+    <div id="depth-meter">0</div>
+    <div id="depth-label">МЕТРОВ</div>
+
+    <!-- Аппарат -->
+    <div id="submarine">
+        <div class="sub-body">
+            <div class="sub-window"></div>
+            <div class="sub-light"></div>
+        </div>
+    </div>
+
+    <!-- Статистика -->
+    <div class="ui-panel" id="stats-panel">
+        <div class="stat-row">
+            <span>Планктон:</span>
+            <span class="stat-value" id="plankton">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Скорость:</span>
+            <span class="stat-value" id="speed">1 м/клик</span>
+        </div>
+        <div class="stat-row">
+            <span>Автономность:</span>
+            <span class="stat-value" id="auto">0 м/с</span>
+        </div>
+        <div class="stat-row">
+            <span>Находки:</span>
+            <span class="stat-value" id="finds">0</span>
+        </div>
+    </div>
+
+    <!-- Коллекция -->
+    <div class="ui-panel" id="collection-panel">
+        <div class="collection-title">КОЛЛЕКЦИЯ</div>
+        <div id="collection-list"></div>
+    </div>
+
+    <!-- Апгрейды -->
+    <div class="ui-panel" id="upgrades-panel">
+        <div class="collection-title">УЛУЧШЕНИЯ</div>
+        <div id="upgrades-list"></div>
+    </div>
+
+    <!-- Кнопка погружения -->
+    <button id="click-btn">ПОГРУЗИТЬСЯ</button>
+
+    <!-- Уведомление -->
+    <div id="notification"></div>
+
+    <!-- Прогресс -->
+    <div id="depth-progress">
+        <div id="depth-progress-fill"></div>
+    </div>
+
+    <!-- Автопогружение -->
+    <div id="auto-dive">Автопогружение: <span id="auto-rate">0</span> м/с</div>
+
+    <!-- Модальное окно старта -->
+    <div class="modal" id="start-modal">
+        <div class="modal-content">
+            <h2>ГЛУБИНА</h2>
+            <p>Ты — исследователь океана. Твой аппарат готов к погружению.</p>
+            <p>Каждый метр — новые находки. Каждая находка — новая тайна.</p>
+            <p style="color: #00d4aa; font-weight: bold;">Как глубоко ты готов зайти?</p>
+            <button class="modal-btn" onclick="startGame()">НАЧАТЬ ПОГРУЖЕНИЕ</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно находки -->
+    <div class="modal" id="find-modal">
+        <div class="modal-content">
+            <h2 id="find-title">НАХОДКА!</h2>
+            <p id="find-description"></p>
+            <p id="find-reward" style="color: #ffd700; font-weight: bold;"></p>
+            <button class="modal-btn" onclick="closeFindModal()">ПРОДОЛЖИТЬ</button>
+        </div>
+    </div>
+
+    <script>
+        // === ИГРОВОЕ СОСТОЯНИЕ ===
+        const state = {
+            depth: 0,
+            plankton: 0,
+            clickPower: 1,
+            autoRate: 0,
+            totalFinds: 0,
+            creatures: [],
+            upgrades: [],
+            lastSave: Date.now()
+        };
+
+        // === СУЩЕСТВА ===
+        const creatures = [
+            // Свет (0-200м)
+            { name: 'Светящаяся медуза', icon: '🪼', rarity: 'common', minDepth: 10, chance: 0.3, reward: 5 },
+            { name: 'Тропическая рыба', icon: '🐠', rarity: 'common', minDepth: 30, chance: 0.25, reward: 8 },
+            { name: 'Морская черепаха', icon: '🐢', rarity: 'common', minDepth: 50, chance: 0.2, reward: 12 },
+            { name: 'Дельфин', icon: '🐬', rarity: 'rare', minDepth: 80, chance: 0.1, reward: 25 },
+            { name: 'Коралловый сад', icon: '🪸', rarity: 'rare', minDepth: 120, chance: 0.08, reward: 40 },
+            
+            // Сумрак (200-1000м)
+            { name: 'Светящийся кальмар', icon: '🦑', rarity: 'rare', minDepth: 250, chance: 0.12, reward: 50 },
+            { name: 'Ангел глубин', icon: '🐟', rarity: 'epic', minDepth: 400, chance: 0.05, reward: 100 },
+            { name: 'Гигантский осьминог', icon: '🐙', rarity: 'epic', minDepth: 600, chance: 0.04, reward: 150 },
+            { name: 'Затонувший сундук', icon: '📦', rarity: 'epic', minDepth: 500, chance: 0.06, reward: 200 },
+            { name: 'Древний якорь', icon: '⚓', rarity: 'rare', minDepth: 350, chance: 0.1, reward: 80 },
+            
+            // Полночь (1000-4000м)
+            { name: 'Русалка', icon: '🧜', rarity: 'legendary', minDepth: 1500, chance: 0.02, reward: 500 },
+            { name: 'Кракен', icon: '🦑', rarity: 'legendary', minDepth: 2000, chance: 0.015, reward: 800 },
+            { name: 'Затонувший корабль', icon: '🚢', rarity: 'legendary', minDepth: 2500, chance: 0.01, reward: 1000 },
+            { name: 'Неизвестный сигнал', icon: '📡', rarity: 'epic', minDepth: 1800, chance: 0.03, reward: 300 },
+            { name: 'Глубоководная акула', icon: '🦈', rarity: 'epic', minDepth: 1200, chance: 0.05, reward: 250 },
+            
+            // Бездна (4000м+)
+            { name: 'Левиафан', icon: '🐉', rarity: 'legendary', minDepth: 5000, chance: 0.008, reward: 2000 },
+            { name: 'Бездонный глаз', icon: '👁️', rarity: 'legendary', minDepth: 6000, chance: 0.005, reward: 5000 },
+            { name: 'Атлантида', icon: '🏛️', rarity: 'legendary', minDepth: 5500, chance: 0.003, reward: 10000 }
+        ];
+
+        // === АПГРЕЙДЫ ===
+        const upgrades = [
+            { id: 'engine1', name: 'Улучшенный двигатель', cost: 50, effect: () => state.clickPower += 1, desc: '+1 м/клик' },
+            { id: 'engine2', name: 'Турбодвигатель', cost: 200, effect: () => state.clickPower += 3, desc: '+3 м/клик' },
+            { id: 'engine3', name: 'Ионный двигатель', cost: 1000, effect: () => state.clickPower += 10, desc: '+10 м/клик' },
+            { id: 'auto1', name: 'Автопилот', cost: 100, effect: () => state.autoRate += 0.5, desc: '+0.5 м/с' },
+            { id: 'auto2', name: 'Умный автопилот', cost: 500, effect: () => state.autoRate += 2, desc: '+2 м/с' },
+            { id: 'auto3', name: 'Нейросеть погружения', cost: 2000, effect: () => state.autoRate += 5, desc: '+5 м/с' },
+            { id: 'light1', name: 'Мощные фары', cost: 150, effect: () => { /* визуальный эффект */ }, desc: 'Видишь дальше' },
+            { id: 'armor1', name: 'Прочный корпус', cost: 300, effect: () => { /* защита */ }, desc: 'Меньше урона' },
+            { id: 'sonar1', name: 'Сонар', cost: 800, effect: () => { /* показывает находки */ }, desc: 'Видишь сокровища' }
+        ];
+
+        // === ИНИЦИАЛИЗАЦИЯ ===
+        function init() {
+            loadGame();
+            createParticles();
+            renderUpgrades();
+            updateUI();
+            checkDepthZone();
+            
+            // Автосохранение
+            setInterval(saveGame, 10000);
+            
+            // Автопогружение
+            setInterval(() => {
+                if (state.autoRate > 0) {
+                    state.depth += state.autoRate;
+                    updateUI();
+                    checkFinds();
+                    checkDepthZone();
+                }
+            }, 1000);
+            
+            // Пассивный планктон
+            setInterval(() => {
+                const planktonGain = Math.floor(state.depth / 100) + 1;
+                state.plankton += planktonGain;
+                updateUI();
+            }, 2000);
+            
+            // Показать стартовое окно
+            document.getElementById('start-modal').style.display = 'flex';
+        }
+
+        // === СТАРТ ИГРЫ ===
+        function startGame() {
+            document.getElementById('start-modal').style.display = 'none';
+            showNotification('Погружение началось. Удачи, исследователь.');
+        }
+
+        // === КЛИК ===
+        document.getElementById('click-btn').addEventListener('click', (e) => {
+            state.depth += state.clickPower;
+            
+            // Визуальный эффект
+            const btn = e.target;
+            btn.style.transform = 'translateX(-50%) scale(0.9)';
+            setTimeout(() => btn.style.transform = 'translateX(-50%) scale(1)', 100);
+            
+            // Всплывающий текст
+            createFloatText(e.clientX, e.clientY, `+${state.clickPower}м`);
+            
+            // Планктон за клик
+            const planktonGain = Math.floor(Math.random() * 3) + 1;
+            state.plankton += planktonGain;
+            
+            updateUI();
+            checkFinds();
+            checkDepthZone();
+        });
+
+        // === ПРОВЕРКА НАХОДОК ===
+        function checkFinds() {
+            creatures.forEach(creature => {
+                if (state.depth >= creature.minDepth && Math.random() < creature.chance) {
+                    // Проверяем, не находили ли уже
+                    const alreadyFound = state.creatures.find(c => c.name === creature.name);
+                    if (!alreadyFound) {
+                        findCreature(creature);
+                    }
+                }
+            });
+        }
+
+        // === НАХОДКА СУЩЕСТВА ===
+        function findCreature(creature) {
+            state.creatures.push({ ...creature, foundAt: state.depth });
+            state.totalFinds++;
+            state.plankton += creature.reward;
+            
+            // Показать модальное окно
+            document.getElementById('find-title').textContent = 'НОВАЯ НАХОДКА!';
+            document.getElementById('find-description').textContent = `${creature.icon} ${creature.name}`;
+            document.getElementById('find-reward').textContent = `+${creature.reward} планктона`;
+            document.getElementById('find-modal').style.display = 'flex';
+            
+            renderCollection();
+            updateUI();
+        }
+
+        function closeFindModal() {
+            document.getElementById('find-modal').style.display = 'none';
+        }
+
+        // === ОБНОВЛЕНИЕ UI ===
+        function updateUI() {
+            document.getElementById('depth-meter').textContent = Math.floor(state.depth);
+            document.getElementById('plankton').textContent = Math.floor(state.plankton);
+            document.getElementById('speed').textContent = state.clickPower + ' м/клик';
+            document.getElementById('auto').textContent = state.autoRate + ' м/с';
+            document.getElementById('finds').textContent = state.totalFinds;
+            document.getElementById('auto-rate').textContent = state.autoRate;
+            
+            // Прогресс-бар (макс 6000м)
+            const progress = Math.min((state.depth / 6000) * 100, 100);
+            document.getElementById('depth-progress-fill').style.width = progress + '%';
+            
+            // Эффект давления
+            const pressure = Math.min((state.depth / 6000), 1);
+            document.getElementById('pressure-overlay').style.opacity = pressure * 0.7;
+            
+            // Изменение фона по глубине
+            updateOceanBackground();
+        }
+
+        // === ФОН ОКЕАНА ===
+        function updateOceanBackground() {
+            const d = state.depth;
+            const ocean = document.getElementById('ocean');
+            
+            if (d < 200) {
+                ocean.style.background = 'linear-gradient(180deg, #00d4aa 0%, #0077b6 100%)';
+            } else if (d < 1000) {
+                ocean.style.background = 'linear-gradient(180deg, #0077b6 0%, #03045e 100%)';
+            } else if (d < 4000) {
+                ocean.style.background = 'linear-gradient(180deg, #03045e 0%, #000 100%)';
+            } else {
+                ocean.style.background = '#000';
+            }
+        }
+
+        // === ЗОНЫ ГЛУБИНЫ ===
+        function checkDepthZone() {
+            const d = state.depth;
+            let zone = '';
+            
+            if (d < 200) zone = 'СВЕТ';
+            else if (d < 1000) zone = 'СУМРАК';
+            else if (d < 4000) zone = 'ПОЛНОЧЬ';
+            else if (d < 6000) zone = 'БЕЗДНА';
+            else zone = 'ГАДЕС';
+            
+            // Можно добавить визуальные эффекты для зон
+        }
+
+        // === ЧАСТИЦЫ ===
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.animationDuration = (6 + Math.random() * 4) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // === ВСПЛЫВАЮЩИЙ ТЕКСТ ===
+        function createFloatText(x, y, text) {
+            const el = document.createElement('div');
+            el.className = 'float-text';
+            el.textContent = text;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.color = '#00d4aa';
+            el.style.fontSize = '20px';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1000);
+        }
+
+        // === УВЕДОМЛЕНИЕ ===
+        function showNotification(text) {
+            const notif = document.getElementById('notification');
+            notif.textContent = text;
+            notif.classList.add('show');
+            setTimeout(() => notif.classList.remove('show'), 3000);
+        }
+
+        // === КОЛЛЕКЦИЯ ===
+        function renderCollection() {
+            const list = document.getElementById('collection-list');
+            list.innerHTML = '';
+            
+            state.creatures.forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'creature-item';
+                item.innerHTML = `
+                    <div class="creature-icon creature-rarity-${c.rarity}">${c.icon}</div>
+                    <div>
+                        <div>${c.name}</div>
+                        <div style="opacity: 0.6; font-size: 10px;">${c.foundAt}м</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // === АПГРЕЙДЫ ===
+        function renderUpgrades() {
+            const list = document.getElementById('upgrades-list');
+            list.innerHTML = '';
+            
+            upgrades.forEach(u => {
+                const purchased = state.upgrades.includes(u.id);
+                const item = document.createElement('div');
+                item.className = 'upgrade-item' + (purchased ? ' purchased' : '');
+                item.innerHTML = `
+                    <div>
+                        <div>${u.name}</div>
+                        <div style="font-size: 11px; opacity: 0.7;">${u.desc}</div>
+                    </div>
+                    <div class="upgrade-cost">${purchased ? 'Куплено' : u.cost + ' 🦠'}</div>
+                `;
+                
+                if (!purchased) {
+                    item.addEventListener('click', () => buyUpgrade(u));
+                }
+                
+                list.appendChild(item);
+            });
+        }
+
+        function buyUpgrade(upgrade) {
+            if (state.plankton >= upgrade.cost) {
+                state.plankton -= upgrade.cost;
+                state.upgrades.push(upgrade.id);
+                upgrade.effect();
+                renderUpgrades();
+                updateUI();
+                showNotification(`Куплено: ${upgrade.name}`);
+            } else {
+                showNotification('Недостаточно планктона!');
+            }
+        }
+
+        // === СОХРАНЕНИЕ ===
+        function saveGame() {
+            localStorage.setItem('glubina_save', JSON.stringify(state));
+        }
+
+        function loadGame() {
+            const saved = localStorage.getItem('glubina_save');
+            if (saved) {
+                const loaded = JSON.parse(saved);
+                Object.assign(state, loaded);
+                
+                // Восстанавливаем эффекты апгрейдов
+                state.upgrades.forEach(id => {
+                    const upgrade = upgrades.find(u => u.id === id);
+                    if (upgrade) upgrade.effect();
+                });
+                
+                renderCollection();
+            }
+        }
+
+        // === «ПОСЛЕДНИЙ МЕТР» — удержание ===
+        let leaveTimer;
+        document.addEventListener('mouseleave', () => {
+            leaveTimer = setTimeout(() => {
+                // Шанс редкой находки при попытке уйти
+                if (Math.random() < 0.4 && state.depth > 100) {
+                    const rareCreatures = creatures.filter(c => 
+                        c.rarity === 'epic' || c.rarity === 'legendary'
+                    );
+                    const random = rareCreatures[Math.floor(Math.random() * rareCreatures.length)];
+                    showNotification(`Сонар обнаружил что-то на ${Math.floor(state.depth + 50)}м...`);
+                }
+            }, 2000);
+        });
+
+        document.addEventListener('mouseenter', () => {
+            clearTimeout(leaveTimer);
+        });
+
+        // === ЗАПУСК ===
+        init();
+    </script>
+</body>
+</html>
